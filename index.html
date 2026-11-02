@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>てんびんで方程式</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Zen+Maru+Gothic:wght@500;700&family=STIX+Two+Text:ital@1&display=swap">
+<style>
+/* Layout: 実験台（てんびん）を主役に、右に「式」と「記録」のノート欄。狭い画面では縦積み */
+:root{
+  --bg:#eef1f5; --surface:#ffffff; --ink:#1c2633; --muted:#5b6a7b; --line:#cdd5df;
+  --metal:#7f8c9b; --metal-dark:#56626f;
+  --ball:#f08a24; --ball-edge:#c8670d;
+  --xbox:#3a57d6; --xbox-edge:#2a40a3;
+  --ok:#228a5e; --tilt:#c2402f; --chip:#e3e8ef;
+  --f-display:"Zen Maru Gothic","Hiragino Maru Gothic ProN","BIZ UDPGothic",sans-serif;
+  --f-body:"BIZ UDPGothic","Hiragino Sans","Yu Gothic",sans-serif;
+  --f-var:"STIX Two Text","Times New Roman",serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#131920; --surface:#1b232d; --ink:#e5ebf2; --muted:#98a6b6; --line:#2f3b48;
+  --metal:#8b98a7; --metal-dark:#b2bdc9;
+  --ball:#f59a3c; --ball-edge:#d97a1c;
+  --xbox:#6b88ff; --xbox-edge:#4d68dc;
+  --ok:#4cc38e; --tilt:#f07a68; --chip:#26313d; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#131920; --surface:#1b232d; --ink:#e5ebf2; --muted:#98a6b6; --line:#2f3b48;
+  --metal:#8b98a7; --metal-dark:#b2bdc9;
+  --ball:#f59a3c; --ball-edge:#d97a1c;
+  --xbox:#6b88ff; --xbox-edge:#4d68dc;
+  --ok:#4cc38e; --tilt:#f07a68; --chip:#26313d; color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-family:var(--f-display);font-weight:700;font-size:1.7rem;margin:0;letter-spacing:.02em;text-wrap:balance}
+h1 small{display:block;font-size:.8rem;color:var(--muted);font-weight:500;letter-spacing:.08em}
+.var{font-family:var(--f-var);font-style:italic;font-size:1.15em;padding:0 .04em}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--xbox);outline-offset:2px}
+
+.presets{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.presets .lab{font-size:.78rem;color:var(--muted);letter-spacing:.08em}
+.chip{border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 14px;font-weight:700}
+.chip[aria-pressed="true"]{border-color:var(--xbox);background:var(--xbox);color:#fff}
+
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+
+.stage{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 14px 18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.eq{font-family:var(--f-body);font-weight:700;font-size:clamp(1.4rem,3.4vw,2.2rem);text-align:center;display:flex;justify-content:center;align-items:baseline;gap:.5em;flex-wrap:wrap;min-height:1.6em}
+.eq .rel{font-size:1.15em;min-width:1em;display:inline-block;text-align:center;transition:color .2s}
+.eq .rel.ok{color:var(--ok)}.eq .rel.ng{color:var(--tilt)}
+.status{text-align:center;font-family:var(--f-display);font-weight:700;font-size:1.05rem;min-height:1.6em}
+.status.ok{color:var(--ok)}.status.ng{color:var(--tilt)}
+svg{width:100%;height:auto;display:block;touch-action:manipulation}
+.item{cursor:pointer}
+.item:hover .shape,.item:focus-visible .shape{filter:brightness(1.12)}
+.item:focus{outline:none}
+.item:focus-visible .ring{stroke:var(--ink);stroke-width:2.5}
+
+.pans{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.side{display:flex;flex-direction:column;align-items:center;gap:6px}
+.side .nm{font-size:.78rem;color:var(--muted);letter-spacing:.1em}
+.side .btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.add{border:1.5px solid var(--line);background:var(--bg);border-radius:10px;padding:6px 12px;font-weight:700;display:inline-flex;align-items:center;gap:6px}
+.add:hover{border-color:var(--muted)}
+.add:disabled{opacity:.4;cursor:not-allowed}
+.dot{width:14px;height:14px;border-radius:50%;background:var(--ball);border:1.5px solid var(--ball-edge);display:inline-block}
+.box{width:16px;height:16px;border-radius:3px;background:var(--xbox);color:#fff;font-family:var(--f-var);font-style:italic;font-size:12px;line-height:14px;text-align:center;display:inline-block}
+.hint{font-size:.82rem;color:var(--muted);text-align:center;margin:0}
+
+aside{display:flex;flex-direction:column;gap:12px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px}
+.card h2{font-family:var(--f-display);font-size:1rem;margin:0 0 8px;font-weight:700}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.tool{border:1.5px solid var(--line);background:var(--surface);border-radius:10px;padding:7px 12px;font-weight:700}
+.tool:hover{border-color:var(--muted)}
+.tool:disabled{opacity:.4;cursor:not-allowed}
+.tool.primary{background:var(--xbox);border-color:var(--xbox);color:#fff}
+
+.custom{display:flex;align-items:center;gap:3px;flex-wrap:wrap;font-weight:700;font-size:1.02rem}
+.custom input{width:2.7em;padding:4px 2px;border:1.5px solid var(--line);border-radius:8px;background:var(--bg);text-align:center;font-weight:700}
+.msg{font-size:.85rem;margin:6px 0 0;min-height:1.3em;color:var(--muted)}
+.msg.err{color:var(--tilt)}
+
+.log{list-style:none;margin:0;padding:0;max-height:260px;overflow:auto;display:flex;flex-direction:column;gap:2px;font-size:.88rem}
+.log li{display:grid;grid-template-columns:1.8em minmax(0,1fr);gap:4px;padding:5px 2px;border-bottom:1px dashed var(--line)}
+.log li .n{color:var(--muted);font-variant-numeric:tabular-nums}
+.log li .e{font-weight:700;display:block}
+.log li .e .r-ok{color:var(--ok)}.log li .e .r-ng{color:var(--tilt)}
+
+details summary{cursor:pointer;font-family:var(--f-display);font-weight:700;font-size:1rem}
+details[open] summary{margin-bottom:10px}
+.sub{font-size:.78rem;color:var(--muted);margin:10px 0 4px;letter-spacing:.06em}
+.switch{display:flex;align-items:center;gap:8px;font-weight:700;cursor:pointer}
+.switch input{width:18px;height:18px;accent-color:var(--xbox)}
+.reveal{margin-top:6px;font-weight:700;color:var(--xbox)}
+
+.banner{position:relative}
+.goal{text-align:center;font-size:.85rem;color:var(--muted);letter-spacing:.06em}
+.goal b{display:inline-block;min-width:1.6em;border:1.5px dashed var(--muted);border-radius:4px;line-height:1.2;margin:0 2px}
+.divide{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;padding:10px;border-radius:12px;background:var(--bg)}
+.divide .dlab{font-weight:700}
+.divide select{font-weight:700;font-size:1.05rem;padding:4px 8px;border:1.5px solid var(--line);border-radius:8px;background:var(--surface)}
+.dmsg{text-align:center;margin:0}
+.chal{border:2px solid var(--ball)}
+.chal .cdesc{font-size:.85rem;color:var(--muted);margin:0 0 10px}
+.chal .lv{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.chal .lv .chip{padding:4px 10px;font-size:.85rem}
+.chal .meta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.85rem;color:var(--muted);margin:8px 0;font-variant-numeric:tabular-nums}
+.chal .meta b{color:var(--ink)}
+.ans{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-weight:700;font-size:1.1rem}
+.ans input{width:3.4em;padding:4px;border:1.5px solid var(--line);border-radius:8px;background:var(--bg);text-align:center;font-weight:700}
+.stars{font-size:1.5rem;letter-spacing:.1em;color:var(--ball);min-height:1.6em;text-align:center}
+.stars .off{color:var(--line)}
+.cres{font-size:.9rem;text-align:center;margin:0;min-height:1.4em;font-weight:700}
+.cres.ok{color:var(--ok)}.cres.ng{color:var(--tilt)}
+.score{display:flex;justify-content:center;gap:16px;font-size:.85rem;color:var(--muted);margin-top:6px;font-variant-numeric:tabular-nums}
+.score b{color:var(--ink);font-size:1.05rem}
+@media (prefers-reduced-motion:no-preference){
+  .pop{animation:pop .5s ease-out}
+  @keyframes pop{0%{transform:scale(.9);opacity:.3}60%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
+}
+html,body{margin:0}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1><small>中学1年 方程式｜等式の性質</small>てんびんで方程式</h1>
+    <div class="presets" role="group" aria-label="問題をえらぶ">
+      <span class="lab">問題</span>
+      <button class="chip" data-p="q1" id="p-q1"></button>
+      <button class="chip" data-p="q2" id="p-q2"></button>
+      <button class="chip" data-p="q3" id="p-q3"></button>
+      <button class="chip" data-p="q4" id="p-q4"></button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <section class="stage" aria-label="てんびん">
+      <div class="goal">ゴール：<span class="var">x</span> ＝ <b>&nbsp;</b> の形にしよう</div>
+      <div class="eq" id="eq" aria-live="polite"></div>
+      <svg id="svg" viewBox="0 0 900 470" role="img" aria-label="てんびんの図。皿の上のおもりをクリックすると取りのぞけます">
+        <!-- 台 -->
+        <path d="M360 455 H540 L520 432 H380 Z" fill="var(--metal-dark)"/>
+        <rect x="442" y="126" width="16" height="310" rx="4" fill="var(--metal)"/>
+        <!-- 目盛 -->
+        <g id="scale"></g>
+        <!-- 皿（左・右） -->
+        <g id="panL"></g>
+        <g id="panR"></g>
+        <!-- さお -->
+        <g id="beam">
+          <line x1="450" y1="122" x2="450" y2="40" stroke="var(--tilt)" stroke-width="4" stroke-linecap="round"/>
+          <rect x="130" y="114" width="640" height="14" rx="7" fill="var(--metal)"/>
+          <circle cx="140" cy="121" r="7" fill="var(--metal-dark)"/>
+          <circle cx="760" cy="121" r="7" fill="var(--metal-dark)"/>
+        </g>
+        <circle cx="450" cy="121" r="13" fill="var(--metal-dark)"/>
+        <circle cx="450" cy="121" r="5" fill="var(--surface)"/>
+      </svg>
+      <div class="status" id="status" aria-live="polite"></div>
+      <div class="pans">
+        <div class="side">
+          <span class="nm">左の皿</span>
+          <div class="btns">
+            <button class="add" data-add="L,x" id="addLx" aria-label="左の皿に x を1個のせる">＋ <span class="box">x</span></button>
+            <button class="add" data-add="L,b" id="addLb" aria-label="左の皿に玉を1個のせる">＋ <span class="dot"></span></button>
+          </div>
+          <div class="btns">
+            <button class="add" data-rm="L,x" id="rmLx" aria-label="左の皿から x を1個とる">－ <span class="box">x</span></button>
+            <button class="add" data-rm="L,b" id="rmLb" aria-label="左の皿から玉を1個とる">－ <span class="dot"></span></button>
+          </div>
+        </div>
+        <div class="side">
+          <span class="nm">右の皿</span>
+          <div class="btns">
+            <button class="add" data-add="R,x" id="addRx" aria-label="右の皿に x を1個のせる">＋ <span class="box">x</span></button>
+            <button class="add" data-add="R,b" id="addRb" aria-label="右の皿に玉を1個のせる">＋ <span class="dot"></span></button>
+          </div>
+          <div class="btns">
+            <button class="add" data-rm="R,x" id="rmRx" aria-label="右の皿から x を1個とる">－ <span class="box">x</span></button>
+            <button class="add" data-rm="R,b" id="rmRb" aria-label="右の皿から玉を1個とる">－ <span class="dot"></span></button>
+          </div>
+        </div>
+      </div>
+      <div class="divide">
+        <span class="dlab">両方の皿を</span>
+        <select id="divN" aria-label="いくつに分けるか">
+          <option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option>
+        </select>
+        <span class="dlab">等分する</span>
+        <button class="tool primary" id="divBtn">÷ 割る</button>
+      </div>
+      <p class="msg dmsg" id="dmsg"></p>
+      <p class="hint">「－」ボタンか、皿の上の <span class="box">x</span> や <span class="dot"></span> をクリックすると、取りのぞけます。<span class="dot"></span> は1個 1 の重さです。</p>
+      <div class="row" style="justify-content:center">
+        <button class="tool" id="undo">ひとつ戻す</button>
+        <button class="tool" id="reset">はじめから</button>
+      </div>
+    </section>
+
+    <aside>
+      <div class="card chal">
+        <h2>チャレンジ問題</h2>
+        <p class="cdesc">早く終わった人向け。なぞの箱 <span class="box">x</span> の重さを当てよう。天秤で <span class="var">x</span> ＝ □ にしてから答えると星が増えます。目標の手数以内なら★3つ！</p>
+        <div class="lv" role="group" aria-label="レベル">
+          <button class="chip" data-lv="1" aria-pressed="true">Lv1　<span class="var">x</span>＋●＝●</button>
+          <button class="chip" data-lv="2" aria-pressed="false">Lv2　●<span class="var">x</span>＋●＝●</button>
+          <button class="chip" data-lv="3" aria-pressed="false">Lv3　両方に <span class="var">x</span></button>
+        </div>
+        <button class="tool primary" id="newChal">問題を出す</button>
+        <div class="meta" id="cmeta" hidden><span>いまの手数 <b id="cmoves">0</b> 手</span><span>目標 <b id="cpar">0</b> 手以内</span></div>
+        <div class="ans" id="cans" hidden>
+          <span class="var">x</span> ＝ <input id="cinput" type="number" min="0" max="20" aria-label="xの値">
+          <button class="tool" id="cchk">答え合わせ</button>
+        </div>
+        <div class="stars" id="cstars" aria-live="polite"></div>
+        <p class="cres" id="cres" aria-live="polite"></p>
+        <div class="score"><span>連続正解 <b id="cstreak">0</b></span><span>あつめた★ <b id="ctotal">0</b></span></div>
+      </div>
+
+      <div class="card">
+        <h2>調査の記録</h2>
+        <ol class="log" id="log"></ol>
+      </div>
+
+      <div class="card">
+        <h2>自分で式をつくる</h2>
+        <div class="custom">
+          <input id="ca" type="number" min="0" max="9" value="3" aria-label="左辺の x の係数"><span class="var">x</span>＋
+          <input id="cb" type="number" min="0" max="18" value="1" aria-label="左辺の数">＝
+          <input id="cc" type="number" min="0" max="9" value="1" aria-label="右辺の x の係数"><span class="var">x</span>＋
+          <input id="cd" type="number" min="0" max="18" value="7" aria-label="右辺の数">
+        </div>
+        <div class="row" style="margin-top:8px"><button class="tool primary" id="setCustom">この式でセット</button></div>
+        <p class="msg" id="cmsg"></p>
+      </div>
+
+      <div class="card">
+        <details id="teacher">
+          <summary>まとめて操作・先生用</summary>
+          <div class="sub">両方の皿に同じことをする</div>
+          <div class="row">
+            <button class="tool" data-both="+b">両方に <span class="dot"></span> を1個のせる</button>
+            <button class="tool" data-both="-b">両方から <span class="dot"></span> を1個とる</button>
+            <button class="tool" data-both="-x">両方から <span class="box">x</span> を1個とる</button>
+            <button class="tool" data-both="*2">両方を2倍にする</button>
+          </div>
+          <p class="msg" id="bmsg"></p>
+          <div class="sub">表示</div>
+          <label class="switch"><input type="checkbox" id="showEq" checked> 式を表示する</label>
+          <label class="switch"><input type="checkbox" id="showX"> <span><span class="var">x</span> の重さを見る</span></label>
+          <div class="reveal" id="reveal" hidden></div>
+        </details>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(() => {
+  const PRESETS = {
+    q1:{a:1,b:3,c:0,d:5},
+    q2:{a:2,b:3,c:0,d:7},
+    q3:{a:4,b:3,c:1,d:9},
+    q4:{a:3,b:1,c:1,d:7}
+  };
+  const MAXX = 9, MAXB = 18, PERROW = 7;
+  const PIV = {x:450, y:121}, ARM = 310, HANG = 175;
+  const NS = 'http://www.w3.org/2000/svg';
+
+  let st = {L:{x:1,b:3}, R:{x:0,b:5}};
+  let xw = 2, origin = null, current = null;
+  let undoStack = [], logItems = [];
+
+  const $ = id => document.getElementById(id);
+  const svg = $('svg');
+  const panL = $('panL'), panR = $('panR'), beam = $('beam');
+
+  // ----- 数式の表記 -----
+  function termHTML(s){
+    const p = [];
+    if (s.x > 0) p.push((s.x===1?'':s.x) + '<span class="var">x</span>');
+    if (s.b > 0) p.push(String(s.b));
+    return p.length ? p.join(' ＋ ') : '0';
+  }
+  function termText(s){
+    const p = [];
+    if (s.x > 0) p.push((s.x===1?'':s.x) + 'x');
+    if (s.b > 0) p.push(String(s.b));
+    return p.length ? p.join('＋') : '0';
+  }
+  const weight = s => s.x * xw + s.b;
+  function relation(){
+    const d = weight(st.L) - weight(st.R);
+    if (Math.abs(d) < 1e-9) return '=';
+    return d > 0 ? '>' : '<';
+  }
+  const relSym = r => r==='=' ? '＝' : (r==='>' ? '＞' : '＜');
+  const fmt = n => Number.isInteger(n) ? String(n) : String(Math.round(n*100)/100);
+
+  // ----- 目盛 -----
+  (function drawScale(){
+    const g = $('scale'); const R = 78;
+    for (let a = -15; a <= 15; a += 5){
+      const t = a*Math.PI/180;
+      const x1 = PIV.x + Math.sin(t)*R, y1 = PIV.y - Math.cos(t)*R;
+      const len = a===0 ? 14 : 8;
+      const x2 = PIV.x + Math.sin(t)*(R+len), y2 = PIV.y - Math.cos(t)*(R+len);
+      const l = document.createElementNS(NS,'line');
+      l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2);
+      l.setAttribute('stroke', a===0 ? 'var(--ok)' : 'var(--muted)');
+      l.setAttribute('stroke-width', a===0 ? 3 : 1.5);
+      g.appendChild(l);
+    }
+    const arc = document.createElementNS(NS,'path');
+    const s = -15*Math.PI/180, e = 15*Math.PI/180;
+    arc.setAttribute('d',`M${PIV.x+Math.sin(s)*R} ${PIV.y-Math.cos(s)*R} A${R} ${R} 0 0 1 ${PIV.x+Math.sin(e)*R} ${PIV.y-Math.cos(e)*R}`);
+    arc.setAttribute('fill','none');arc.setAttribute('stroke','var(--line)');arc.setAttribute('stroke-width','2');
+    g.appendChild(arc);
+  })();
+
+  // ----- 皿の描画 -----
+  function el(tag, attrs, parent){
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function drawPan(g, side){
+    g.innerHTML = '';
+    // ひも
+    el('path',{d:`M0 ${-HANG} L-122 -4 M0 ${-HANG} L122 -4`,stroke:'var(--muted)','stroke-width':1.5,fill:'none'},g);
+    el('circle',{cx:0,cy:-HANG,r:4,fill:'var(--metal-dark)'},g);
+    // 皿
+    el('path',{d:'M-135 -4 H135 Q120 16 0 16 Q-120 16 -135 -4 Z',fill:'var(--metal)'},g);
+    const s = st[side];
+    const items = [];
+    for (let i=0;i<s.x;i++) items.push('x');
+    for (let i=0;i<s.b;i++) items.push('b');
+    const sideName = side==='L' ? '左' : '右';
+    items.forEach((t,i)=>{
+      const row = Math.floor(i/PERROW), col = i%PERROW;
+      const n = Math.min(PERROW, items.length - row*PERROW);
+      const cx = (col-(n-1)/2)*36, cy = -22 - row*36;
+      const it = el('g',{class:'item',tabindex:0,role:'button',
+        'aria-label': `${sideName}の皿の${t==='x'?'x':'玉'}を取りのぞく`,transform:`translate(${cx} ${cy})`},g);
+      if (t==='x'){
+        el('rect',{class:'shape ring',x:-16,y:-16,width:32,height:32,rx:5,fill:'var(--xbox)',stroke:'var(--xbox-edge)','stroke-width':1.5},it);
+        const tx = el('text',{x:0,y:7,'text-anchor':'middle',fill:'#fff','font-family':'STIX Two Text, Times New Roman, serif','font-style':'italic','font-size':22},it);
+        tx.textContent = 'x';
+      } else {
+        el('circle',{class:'shape ring',cx:0,cy:0,r:16,fill:'var(--ball)',stroke:'var(--ball-edge)','stroke-width':1.5},it);
+        el('circle',{cx:-5,cy:-6,r:4.5,fill:'#fff',opacity:.45},it);
+      }
+      const act = () => removeOne(side, t);
+      it.addEventListener('click', act);
+      it.addEventListener('keydown', e => { if (e.key==='Enter'||e.key===' '){ e.preventDefault(); act(); }});
+    });
+  }
+
+  // ----- アニメーション（ばね） -----
+  let ang = 0, vel = 0, target = 0, last = 0, running = false;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+  function targetAngle(){
+    const d = weight(st.R) - weight(st.L);
+    if (Math.abs(d) < 1e-9) return 0;
+    return Math.sign(d) * Math.min(15, 6 + 2*Math.abs(d));
+  }
+  function place(){
+    const t = ang*Math.PI/180;
+    beam.setAttribute('transform', `rotate(${ang} ${PIV.x} ${PIV.y})`);
+    const lx = PIV.x - Math.cos(t)*ARM, ly = PIV.y - Math.sin(t)*ARM;
+    const rx = PIV.x + Math.cos(t)*ARM, ry = PIV.y + Math.sin(t)*ARM;
+    panL.setAttribute('transform', `translate(${lx} ${ly+HANG})`);
+    panR.setAttribute('transform', `translate(${rx} ${ry+HANG})`);
+  }
+  function tick(ts){
+    const dt = Math.min(0.033, (ts - last)/1000 || 0.016); last = ts;
+    const k = 60, c = 9;
+    vel += (k*(target-ang) - c*vel)*dt;
+    ang += vel*dt;
+    place();
+    if (Math.abs(target-ang) < 0.02 && Math.abs(vel) < 0.02){ ang = target; place(); running=false; return; }
+    requestAnimationFrame(tick);
+  }
+  function animate(){
+    target = targetAngle();
+    if (reduce.matches){ ang = target; vel = 0; place(); return; }
+    if (!running){ running = true; last = performance.now(); requestAnimationFrame(tick); }
+  }
+
+  // ----- 画面更新 -----
+  function solvedValue(){
+    const r = relation(); if (r !== '=') return null;
+    if (st.L.x===1 && st.L.b===0 && st.R.x===0) return st.R.b;
+    if (st.R.x===1 && st.R.b===0 && st.L.x===0) return st.L.b;
+    return null;
+  }
+  function render(){
+    drawPan(panL,'L'); drawPan(panR,'R');
+    const r = relation();
+    const showEq = $('showEq').checked;
+    $('eq').innerHTML = showEq
+      ? `<span>${termHTML(st.L)}</span><span class="rel ${r==='='?'ok':'ng'}">${relSym(r)}</span><span>${termHTML(st.R)}</span>`
+      : '';
+    const sv = solvedValue(), status = $('status');
+    status.classList.remove('pop');
+    if (sv !== null){
+      status.className = 'status ok';
+      status.innerHTML = st.L.x===1
+        ? `<span class="var">x</span> ＝ ${sv} の形になった！（<span class="var">x</span> 1個は <span class="dot"></span> ${sv}個分）`
+        : `${sv} ＝ <span class="var">x</span> → 左右を入れかえて <span class="var">x</span> ＝ ${sv}！`;
+      void status.offsetWidth; status.classList.add('pop');
+    } else if (r === '='){
+      status.className = 'status ok'; status.textContent = 'つり合っている';
+    } else {
+      status.className = 'status ng';
+      status.textContent = (r==='>' ? '左' : '右') + 'が重い（' + (r==='>' ? '右' : '左') + 'が浮いている）';
+    }
+    $('addLx').disabled = st.L.x>=MAXX; $('addRx').disabled = st.R.x>=MAXX;
+    $('addLb').disabled = st.L.b>=MAXB; $('addRb').disabled = st.R.b>=MAXB;
+    $('rmLx').disabled = st.L.x<=0; $('rmRx').disabled = st.R.x<=0;
+    $('rmLb').disabled = st.L.b<=0; $('rmRb').disabled = st.R.b<=0;
+    $('undo').disabled = undoStack.length===0;
+    document.querySelectorAll('[data-both]').forEach(b=>{ b.disabled = !canBoth(b.dataset.both); });
+    $('reveal').hidden = !$('showX').checked;
+    $('reveal').innerHTML = `<span class="var">x</span> 1個 ＝ <span class="dot"></span> ${fmt(xw)}個分の重さ`;
+    renderLog();
+    if (chal) $('cmoves').textContent = logItems.length - 1;
+    animate();
+  }
+  function renderLog(){
+    const ol = $('log'); ol.innerHTML = '';
+    logItems.forEach((it,i)=>{
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="n">${i+1}</span><span>${it.what}<span class="e">${it.eq}</span></span>`;
+      ol.appendChild(li);
+    });
+    ol.scrollTop = ol.scrollHeight;
+  }
+  function eqLine(){
+    const r = relation();
+    return `${termHTML(st.L)} <span class="${r==='='?'r-ok':'r-ng'}">${relSym(r)}</span> ${termHTML(st.R)}`;
+  }
+  const clone = o => JSON.parse(JSON.stringify(o));
+  function commit(what){
+    if (!what.includes('等分')) $('dmsg').textContent = '';
+    logItems.push({what, eq:eqLine()});
+    render();
+  }
+  function snapshot(){ undoStack.push({st:clone(st), log:logItems.length}); if (undoStack.length>200) undoStack.shift(); }
+
+  // ----- 操作 -----
+  const NAME = {x:'<span class="box">x</span>', b:'<span class="dot"></span>'};
+  const SIDE = {L:'左', R:'右'};
+  function removeOne(side, t){
+    if (st[side][t] <= 0) return;
+    snapshot(); st[side][t]--;
+    commit(`${SIDE[side]}の皿から ${NAME[t]} を1個とった`);
+  }
+  function addOne(side, t){
+    const max = t==='x'?MAXX:MAXB;
+    if (st[side][t] >= max) return;
+    snapshot(); st[side][t]++;
+    commit(`${SIDE[side]}の皿に ${NAME[t]} を1個のせた`);
+  }
+  function canBoth(op){
+    const L = st.L, R = st.R;
+    switch(op){
+      case '+b': return L.b<MAXB && R.b<MAXB;
+      case '-b': return L.b>0 && R.b>0;
+      case '-x': return L.x>0 && R.x>0;
+      case '*2': return L.x*2<=MAXX && R.x*2<=MAXX && L.b*2<=MAXB && R.b*2<=MAXB && (L.x+L.b+R.x+R.b)>0;
+      default: {
+        const n = +op.slice(1);
+        return [L.x,L.b,R.x,R.b].every(v=>v%n===0) && (L.x+L.b+R.x+R.b)>0;
+      }
+    }
+  }
+  function both(op){
+    const msg = $('bmsg');
+    if (!canBoth(op)){ msg.className='msg err'; msg.textContent='いまの皿の上では、この操作はできません。'; return; }
+    msg.className='msg'; msg.textContent='';
+    snapshot();
+    let what = '';
+    for (const s of ['L','R']){
+      if (op==='+b') st[s].b++;
+      else if (op==='-b') st[s].b--;
+      else if (op==='-x') st[s].x--;
+      else if (op==='*2'){ st[s].x*=2; st[s].b*=2; }
+      else { const n=+op.slice(1); st[s].x/=n; st[s].b/=n; }
+    }
+    if (op==='+b') what = `両方の皿に ${NAME.b} を1個ずつのせた`;
+    else if (op==='-b') what = `両方の皿から ${NAME.b} を1個ずつとった`;
+    else if (op==='-x') what = `両方の皿から ${NAME.x} を1個ずつとった`;
+    else if (op==='*2') what = '両方の皿を2倍にした（×2）';
+    else what = `両方の皿を ${op.slice(1)} 等分した（÷${op.slice(1)}）`;
+    commit(what);
+  }
+  function undo(){
+    const h = undoStack.pop(); if (!h) return;
+    st = h.st; logItems.length = h.log; render();
+  }
+
+  // ----- チャレンジ -----
+  let chal = null, level = 1, streak = 0, total = 0;
+  const rnd = (a,b) => a + Math.floor(Math.random()*(b-a+1));
+  function makeProblem(lv){
+    for (let i=0;i<200;i++){
+      let a, c = 0, xv, b;
+      if (lv===1){ a = 1; xv = rnd(1,6); b = rnd(1,5); }
+      else if (lv===2){ a = rnd(2,4); xv = rnd(1,4); b = rnd(1,5); }
+      else { c = rnd(1,3); a = c + rnd(1,3); xv = rnd(1,4); b = rnd(0,6); }
+      const d = (a-c)*xv + b;
+      if (a<=MAXX && d<=MAXB && !(chal && chal.p.a===a && chal.p.b===b && chal.p.c===c)) return {p:{a,b,c,d}, sol:xv};
+    }
+    return {p:{a:1,b:3,c:0,d:5}, sol:2};
+  }
+  function newChallenge(){
+    const q = makeProblem(level);
+    // 最少手数：両方から玉をとる(2×b) ＋ 両方からxをとる(2×c) ＋ 割る(1)
+    const par = 2*q.p.b + 2*q.p.c + ((q.p.a - q.p.c) > 1 ? 1 : 0);
+    setEquation(q.p, null, true);
+    chal = {p:q.p, sol:q.sol, par, done:false};
+    $('cpar').textContent = par; $('cmoves').textContent = 0;
+    $('cmeta').hidden = false; $('cans').hidden = false;
+    $('cinput').value = ''; $('cstars').innerHTML = ''; $('cres').textContent = ''; $('cres').className = 'cres';
+    $('cchk').disabled = false;
+  }
+  function checkAnswer(){
+    if (!chal || chal.done) return;
+    const v = $('cinput').value.trim(), res = $('cres');
+    if (v === ''){ res.className='cres ng'; res.textContent='x の値を入れてください。'; return; }
+    if (+v !== chal.sol){
+      streak = 0; $('cstreak').textContent = streak;
+      res.className='cres ng'; res.textContent='ちがうみたい。天秤で確かめてみよう。';
+      return;
+    }
+    const moves = logItems.length - 1, solved = solvedValue() !== null;
+    let stars = 1, msg = '正解！ 次は天秤で x ＝ □ にしてから答えてみよう。';
+    if (solved){ stars = 2; msg = `正解！ ${moves}手で解けた。目標は${chal.par}手以内。`; }
+    if (solved && moves <= chal.par){ stars = 3; msg = `パーフェクト！ ${moves}手で解けた。`; }
+    chal.done = true; $('cchk').disabled = true;
+    streak++; total += stars;
+    $('cstreak').textContent = streak; $('ctotal').textContent = total;
+    const st = $('cstars');
+    st.innerHTML = '★'.repeat(stars) + `<span class="off">${'★'.repeat(3-stars)}</span>`;
+    st.classList.remove('pop'); void st.offsetWidth; st.classList.add('pop');
+    res.className='cres ok'; res.textContent = msg + (streak>=3 && level<3 ? ' 次のレベルにも挑戦してみよう！' : '');
+  }
+  function endChallenge(){
+    chal = null; $('cmeta').hidden = true; $('cans').hidden = true;
+    $('cstars').innerHTML = ''; $('cres').textContent = '';
+  }
+
+  // ----- 問題のセット -----
+  function setEquation(p, id, keepChal){
+    if (!keepChal && typeof endChallenge === 'function' && chal) endChallenge();
+    const sol = (p.d - p.b) / (p.a - p.c);
+    xw = sol;
+    origin = clone(p); current = id || null;
+    st = {L:{x:p.a,b:p.b}, R:{x:p.c,b:p.d}};
+    undoStack = []; logItems = [];
+    document.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed', String(c.dataset.p===current)));
+    logItems.push({what:'スタート', eq:eqLine()});
+    render();
+  }
+  function validate(p){
+    if ([p.a,p.b,p.c,p.d].some(v=>!Number.isInteger(v)||v<0)) return '0以上の整数を入れてください。';
+    if (p.a>MAXX||p.c>MAXX) return `x の個数は ${MAXX} 個までです。`;
+    if (p.b>MAXB||p.d>MAXB) return `玉の個数は ${MAXB} 個までです。`;
+    if (p.a===p.c) return '両辺の x の個数が同じだと、x の重さが決まりません。';
+    const sol = (p.d-p.b)/(p.a-p.c);
+    if (sol <= 0) return `この式の解は x = ${fmt(sol)} です。重さが0以下になるので、てんびんでは表せません。`;
+    return null;
+  }
+
+  // ----- イベント -----
+  Object.entries(PRESETS).forEach(([id,p])=>{
+    const b = $('p-'+id);
+    b.textContent = `${termText({x:p.a,b:p.b})} ＝ ${termText({x:p.c,b:p.d})}`;
+    b.addEventListener('click', ()=>{ setEquation(p,id); try{ history.replaceState(null,'','#'+id);}catch(e){} });
+  });
+  document.querySelectorAll('[data-add]').forEach(b=>{
+    b.addEventListener('click', ()=>{ const [s,t]=b.dataset.add.split(','); addOne(s,t); });
+  });
+  document.querySelectorAll('[data-rm]').forEach(b=>{
+    b.addEventListener('click', ()=>{ const [s,t]=b.dataset.rm.split(','); removeOne(s,t); });
+  });
+  document.querySelectorAll('[data-both]').forEach(b=> b.addEventListener('click', ()=> both(b.dataset.both)));
+  $('divBtn').addEventListener('click', ()=>{
+    const n = +$('divN').value, m = $('dmsg'), L = st.L, R = st.R;
+    if (L.x+L.b+R.x+R.b===0){ m.className='msg dmsg err'; m.textContent='皿に何ものっていません。'; return; }
+    const bad = [];
+    [['左','x',L.x],['左','玉',L.b],['右','x',R.x],['右','玉',R.b]].forEach(([s,t,v])=>{ if (v%n!==0) bad.push(`${s}の${t} ${v}個`); });
+    if (bad.length){ m.className='msg dmsg err'; m.textContent=`${bad.join('、')}は ${n} 等分できません。`; return; }
+    m.className='msg dmsg'; m.textContent='';
+    both('/'+n);
+  });
+  document.querySelectorAll('[data-lv]').forEach(b=> b.addEventListener('click', ()=>{
+    level = +b.dataset.lv;
+    document.querySelectorAll('[data-lv]').forEach(x=>x.setAttribute('aria-pressed', String(x===b)));
+  }));
+  $('newChal').addEventListener('click', newChallenge);
+  $('cchk').addEventListener('click', checkAnswer);
+  $('cinput').addEventListener('keydown', e=>{ if (e.key==='Enter') checkAnswer(); });
+  $('undo').addEventListener('click', undo);
+  $('reset').addEventListener('click', ()=> origin && setEquation(origin, current, !!chal));
+  $('showEq').addEventListener('change', render);
+  $('showX').addEventListener('change', render);
+  $('setCustom').addEventListener('click', ()=>{
+    const p = {a:+$('ca').value, b:+$('cb').value, c:+$('cc').value, d:+$('cd').value};
+    const err = validate(p), m = $('cmsg');
+    if (err){ m.className='msg err'; m.textContent=err; return; }
+    const sol = (p.d-p.b)/(p.a-p.c);
+    m.className='msg';
+    m.textContent = Number.isInteger(sol) ? 'セットしました。' : 'セットしました（解が整数ではない式です）。';
+    setEquation(p, null);
+  });
+
+  const h = (location.hash||'').replace('#','');
+  setEquation(PRESETS[h] || PRESETS.q1, PRESETS[h] ? h : 'q1');
+  ang = target = targetAngle(); place();
+})();
+</script>
+</body>
+</html>
